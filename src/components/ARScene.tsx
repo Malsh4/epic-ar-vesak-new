@@ -71,13 +71,30 @@ export default function ARScene() {
         SceneLoader.ImportMesh(
             "",
             "/models/",
-            "vesak-lantern.glb",
+            "VLSSL.glb",
             scene,
             (meshes) => {
-                rootMesh = meshes[meshes.length - 1] as Mesh;
-                rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
 
-                console.log("Model loaded");
+                rootMesh = meshes[0] as Mesh;
+
+                // SCALE
+                rootMesh.scaling = new Vector3(0.25, 0.25, 0.25);
+
+                // START POSITION
+                rootMesh.position = new Vector3(0, -100, 0);
+
+                // GLOW MATERIALS
+                meshes.forEach((mesh: any) => {
+
+                    if (mesh.material) {
+
+                        mesh.material.emissiveColor =
+                            new BABYLON.Color3(1, 0.5, 0);
+
+                    }
+                });
+
+                console.log("VLSSL model loaded");
             }
         );
 
@@ -129,7 +146,8 @@ export default function ARScene() {
             xr.baseExperience.onScreenTouchEventObservable.add(() => {
                 if (!rootMesh || !marker) return;
 
-                rootMesh.position.copyFrom(marker.position);
+                rootMesh.position = marker.position.clone();
+                rootMesh.position.y += 0.3;
             });
         };
 
