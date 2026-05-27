@@ -23,7 +23,6 @@ function SplashScreen({ onEnter }: { onEnter: () => void }) {
     const [phase, setPhase] = useState<"title" | "subtitle" | "instruction" | "ready">("title");
 
     useEffect(() => {
-        // Phase timeline
         const t1 = setTimeout(() => setPhase("subtitle"), 1800);
         const t2 = setTimeout(() => setPhase("instruction"), 3400);
         const t3 = setTimeout(() => setPhase("ready"), 5000);
@@ -54,7 +53,7 @@ function SplashScreen({ onEnter }: { onEnter: () => void }) {
             {/* Ambient particles */}
             <Particles />
 
-            {/* Decorative ring */}
+            {/* Decorative rings */}
             <div style={{
                 position: "absolute",
                 width: 340,
@@ -79,7 +78,7 @@ function SplashScreen({ onEnter }: { onEnter: () => void }) {
                 marginBottom: 24,
                 animation: "lanternFloat 3s ease-in-out infinite",
                 filter: "drop-shadow(0 0 24px rgba(255,160,30,0.7))",
-                opacity: phase === "title" || phase === "subtitle" || phase === "instruction" || phase === "ready" ? 1 : 0,
+                opacity: 1,
                 transition: "opacity 1s ease",
             }}>
                 🏮
@@ -97,11 +96,9 @@ function SplashScreen({ onEnter }: { onEnter: () => void }) {
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
-                opacity: phase === "title" || phase === "subtitle" || phase === "instruction" || phase === "ready" ? 1 : 0,
-                transform: phase === "title" || phase === "subtitle" || phase === "instruction" || phase === "ready"
-                    ? "translateY(0)" : "translateY(20px)",
+                opacity: 1,
+                transform: "translateY(0)",
                 transition: "opacity 1.2s cubic-bezier(0.16,1,0.3,1), transform 1.2s cubic-bezier(0.16,1,0.3,1)",
-                textShadow: "none",
                 filter: "drop-shadow(0 0 30px rgba(255,160,40,0.4))",
                 padding: "0 16px",
             }}>
@@ -150,7 +147,6 @@ function SplashScreen({ onEnter }: { onEnter: () => void }) {
                 transform: phase === "instruction" || phase === "ready" ? "translateY(0)" : "translateY(16px)",
                 transition: "opacity 0.9s ease, transform 0.9s ease",
             }}>
-                {/* Camera icon row */}
                 <div style={{
                     display: "flex",
                     alignItems: "center",
@@ -309,7 +305,6 @@ export default function ARScene() {
     const [fading, setFading] = useState(false);
     const engineStarted = useRef(false);
 
-    // ── Start Babylon only after splash is dismissed ──
     useEffect(() => {
         if (showSplash || engineStarted.current) return;
         engineStarted.current = true;
@@ -347,7 +342,7 @@ export default function ARScene() {
         const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
         light.intensity = 2.2;
 
-        // GUI — small placed indicator
+        // GUI — placed indicator
         const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
         const placedText = new GUI.TextBlock();
         placedText.text = "🏮 Lantern placed!";
@@ -365,7 +360,9 @@ export default function ARScene() {
         const subLanterns: BABYLON.AbstractMesh[] = [];
         let modelPlaced = false;
 
+        // =========================
         // LOAD MODEL
+        // =========================
         const loadModel = () => {
             SceneLoader.ImportMesh(
                 "",
@@ -378,7 +375,10 @@ export default function ARScene() {
                     const parent = new BABYLON.TransformNode("modelParent", scene);
 
                     meshes.forEach((mesh) => {
+                        // ✅ ALL meshes parented to root — sub-lanterns stay
+                        // in the correct position relative to main lantern
                         mesh.parent = parent;
+
                         if (mesh.name.startsWith("sublantern")) {
                             subLanterns.push(mesh);
                         }
@@ -396,7 +396,9 @@ export default function ARScene() {
             );
         };
 
+        // =========================
         // XR SETUP
+        // =========================
         const setupXR = async () => {
             try {
                 console.log("👉 XR STARTING...");
@@ -428,7 +430,6 @@ export default function ARScene() {
                         rootMesh.position.y += 0.3;
                         modelPlaced = true;
 
-                        // Show placed indicator briefly
                         placedText.isVisible = true;
                         setTimeout(() => { placedText.isVisible = false; }, 3000);
 
@@ -443,10 +444,23 @@ export default function ARScene() {
 
         setupXR();
 
+        // =========================
         // RENDER LOOP
+        // =========================
         engine.runRenderLoop(() => {
-            if (rootMesh) rootMesh.rotation.y += 0.005;
-            subLanterns.forEach((lantern) => { lantern.rotation.y -= 0.020; });
+
+            // ROTATE WHOLE MODEL
+            if (rootMesh) {
+                rootMesh.rotation.y += 0.005;
+            }
+
+            // SUB LANTERNS — counter-rotate in world space
+            // Formula: -(own spin) - (parent spin) = net world rotation
+            // -0.025 (desired world spin) - 0.005 (cancel parent) = -0.030 local
+            subLanterns.forEach((lantern) => {
+                lantern.rotation.y -= 0.030;
+            });
+
             scene.render();
         });
 
@@ -472,7 +486,7 @@ export default function ARScene() {
 
     return (
         <>
-            {/* AR Canvas — always mounted so engine can attach */}
+            {/* AR Canvas */}
             <canvas
                 ref={canvasRef}
                 style={{
