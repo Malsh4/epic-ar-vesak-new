@@ -203,9 +203,6 @@ export default function ARScene() {
                 const xr = await scene.createDefaultXRExperienceAsync({
                     uiOptions: {
                         sessionMode: "immersive-ar",
-                        // ── Hide the default Babylon glasses button ──
-                        ignoreNativeCameraTransformation: true,
-                        renderTarget: scene.activeCamera,
                     },
                     optionalFeatures: true,
                     disableDefaultUI: true, // ← hides the glasses button entirely
