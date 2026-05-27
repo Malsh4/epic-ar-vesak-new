@@ -98,6 +98,9 @@ export default function ARScene() {
     const [fading, setFading] = useState(false);
     const engineStarted = useRef(false);
 
+    // ── STEP 2: Audio ref ──
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
     useEffect(() => {
         if (showSplash || engineStarted.current) return;
         engineStarted.current = true;
@@ -117,7 +120,7 @@ export default function ARScene() {
         const camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2.5, 15, Vector3.Zero(), scene);
         camera.attachControl(canvas, true);
 
-        // AMBIENT LIGHT — dim so colour light stands out
+        // AMBIENT LIGHT
         const ambientLight = new HemisphericLight("ambientLight", new Vector3(0, 1, 0), scene);
         ambientLight.intensity = 0.8;
 
@@ -128,19 +131,18 @@ export default function ARScene() {
         colorLight.intensity = 2.5;
         colorLight.range = 8;
 
-        // Festive colour palette
         const festiveColors: Color3[] = [
-            new Color3(1.0, 0.15, 0.15),   // red
-            new Color3(1.0, 0.75, 0.05),   // yellow
-            new Color3(0.1, 0.9, 0.25),    // green
-            new Color3(0.15, 0.45, 1.0),   // blue
-            new Color3(0.9, 0.15, 0.9),    // purple (bonus)
+            new Color3(1.0, 0.15, 0.15),
+            new Color3(1.0, 0.75, 0.05),
+            new Color3(0.1, 0.9, 0.25),
+            new Color3(0.15, 0.45, 1.0),
+            new Color3(0.9, 0.15, 0.9),
         ];
 
         let colorIndex = 0;
         let nextColorIndex = 1;
         let colorLerpT = 0;
-        const COLOR_CHANGE_SPEED = 0.008; // speed of transition (lower = slower)
+        const COLOR_CHANGE_SPEED = 0.008;
 
         // GUI
         const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
@@ -182,7 +184,6 @@ export default function ARScene() {
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
                     rootMesh.position = new Vector3(0, 0, 2);
 
-                    // Position colour light at model centre
                     colorLight.position = rootMesh.position.clone();
                     colorLight.position.y += 0.5;
                 }
@@ -224,7 +225,6 @@ export default function ARScene() {
                         rootMesh.position = marker.position.clone();
                         rootMesh.position.y += 0.3;
 
-                        // Keep colour light tracking the model
                         colorLight.position = rootMesh.position.clone();
                         colorLight.position.y += 0.5;
 
@@ -249,38 +249,28 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
-            // ROTATE WHOLE MODEL
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
 
-            // SUB LANTERNS — counter-rotate
-            // local -0.030 cancels parent +0.005, net world = -0.025
             subLanterns.forEach((lantern) => {
                 lantern.rotation.y -= 0.030;
             });
 
-            // =========================
-            // COLOUR LIGHT ANIMATION
-            // =========================
             colorLerpT += COLOR_CHANGE_SPEED;
 
             if (colorLerpT >= 1) {
-                // Snap to next colour, begin lerping to the one after
                 colorLerpT = 0;
                 colorIndex = nextColorIndex;
                 nextColorIndex = (nextColorIndex + 1) % festiveColors.length;
             }
 
-            // Smooth lerp between current and next colour
             colorLight.diffuse = Color3.Lerp(
                 festiveColors[colorIndex],
                 festiveColors[nextColorIndex],
                 colorLerpT
             );
 
-            // Subtle intensity pulse in sync with colour change
-            // Peaks at mid-transition, dips at colour snap
             colorLight.intensity = 2.0 + Math.sin(colorLerpT * Math.PI) * 1.2;
 
             scene.render();
@@ -290,14 +280,32 @@ export default function ARScene() {
         const resize = () => engine.resize();
         window.addEventListener("resize", resize);
 
+        // ── STEP 4: Cleanup audio on unmount ──
         return () => {
             window.removeEventListener("resize", resize);
             engine.dispose();
+
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.src = "";
+                audioRef.current = null;
+            }
         };
 
     }, [showSplash]);
 
+    // ── STEP 3: Start audio on tap (must be inside user gesture) ──
     const handleEnter = () => {
+
+        if (!audioRef.current) {
+            audioRef.current = new Audio("/audio/vesakSong.mp3");
+            audioRef.current.loop = true;
+            audioRef.current.volume = 0.5;
+        }
+        audioRef.current.play().catch((err) => {
+            console.warn("Audio play failed:", err);
+        });
+
         setFading(true);
         setTimeout(() => {
             setShowSplash(false);
