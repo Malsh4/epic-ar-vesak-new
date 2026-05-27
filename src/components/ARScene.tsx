@@ -8,9 +8,7 @@ import {
     ArcRotateCamera,
     HemisphericLight,
     Vector3,
-    SceneLoader,
     Color4,
-    Mesh,
     MeshBuilder,
 } from "@babylonjs/core";
 
@@ -18,9 +16,11 @@ import "@babylonjs/loaders";
 import * as GUI from "@babylonjs/gui";
 
 export default function ARScene() {
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     useEffect(() => {
+
         const canvas = canvasRef.current;
 
         if (!canvas) return;
@@ -39,9 +39,10 @@ export default function ARScene() {
         // SCENE
         const scene = new Scene(engine);
 
-        scene.clearColor = new Color4(0, 0, 0, 0);
+        // BLACK BACKGROUND
+        scene.clearColor = new Color4(0, 0, 0, 1);
 
-        // CAMERA (fallback non-AR view)
+        // CAMERA
         const camera = new ArcRotateCamera(
             "camera",
             Math.PI / 2,
@@ -62,6 +63,10 @@ export default function ARScene() {
 
         light.intensity = 2.2;
 
+        // =========================
+        // GUI TEXT
+        // =========================
+
         const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
 
         const text = new GUI.TextBlock();
@@ -71,21 +76,14 @@ export default function ARScene() {
         text.fontSize = 48;
 
         gui.addControl(text);
-        // MODEL
-        let rootMesh: Mesh | null = null;
-
-        // MARKER (for AR placement point)
-        let marker: Mesh | null = null;
-
-        // LOAD MODEL
 
         // =========================
-        // XR SETUP (REAL FIX)
+        // XR SETUP
         // =========================
-        let xr: any;
 
         const setupXR = async () => {
-            xr = await scene.createDefaultXRExperienceAsync({
+
+            const xr = await scene.createDefaultXRExperienceAsync({
                 uiOptions: {
                     sessionMode: "immersive-ar",
                 },
@@ -96,7 +94,7 @@ export default function ARScene() {
 
             const fm = xr.baseExperience.featuresManager;
 
-            // HIT TEST (SURFACE DETECTION)
+            // HIT TEST
             const hitTest = fm.enableFeature(
                 BABYLON.WebXRHitTest,
                 "latest"
@@ -104,8 +102,8 @@ export default function ARScene() {
 
             console.log("Hit test enabled");
 
-            // CREATE MARKER (visual dot on table)
-            marker = MeshBuilder.CreateSphere(
+            // DEBUG MARKER
+            const marker = MeshBuilder.CreateSphere(
                 "marker",
                 { diameter: 0.1 },
                 scene
@@ -113,41 +111,51 @@ export default function ARScene() {
 
             marker.isVisible = false;
 
-            // UPDATE MARKER POSITION ON REAL SURFACE
+            // UPDATE MARKER POSITION
             hitTest.onHitTestResultObservable.add((results: any) => {
-                if (results.length && marker) {
+
+                if (results.length) {
+
                     const hit = results[0];
 
                     marker.isVisible = true;
+
                     marker.position.copyFrom(hit.position);
                 }
-            });
-
-            // TAP TO PLACE LANTERN
-            xr.baseExperience.onScreenTouchEventObservable.add(() => {
-                if (!rootMesh || !marker) return;
-
-                rootMesh.position = marker.position.clone();
-                rootMesh.position.y += 0.3;
             });
         };
 
         setupXR();
 
+        // =========================
         // RENDER LOOP
+        // =========================
+
         engine.runRenderLoop(() => {
             scene.render();
         });
 
+        // =========================
         // RESIZE
-        window.addEventListener("resize", () => {
-            engine.resize();
-        });
+        // =========================
 
+        const resize = () => {
+            engine.resize();
+        };
+
+        window.addEventListener("resize", resize);
+
+        // =========================
         // CLEANUP
+        // =========================
+
         return () => {
+
+            window.removeEventListener("resize", resize);
+
             engine.dispose();
         };
+
     }, []);
 
     return (
