@@ -102,7 +102,7 @@ export default function ARScene() {
                     rootMesh = meshes[0];
 
                     // STEP 3 — SCALE + INITIAL POSITION
-                    rootMesh.scaling = new Vector3(0.3, 0.3, 0.3);
+                    rootMesh.scaling = new Vector3(1, 1, 1);
                     rootMesh.position = new Vector3(0, 0, 2);
 
                 }
