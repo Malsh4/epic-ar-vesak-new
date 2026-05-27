@@ -176,6 +176,7 @@ export default function ARScene() {
                     mesh.parent = parent;
                     console.log("Found mesh:", mesh.name);
                     if (mesh.name.toLowerCase().includes("sublantern")) {
+                        mesh.rotationQuaternion = null; // Essential for Euler rotation to work
                         subLanterns.push(mesh);
                         console.log("Added to subLanterns:", mesh.name);
                     }
@@ -266,7 +267,7 @@ export default function ARScene() {
                 // Rotate in opposite direction of rootMesh
                 // rootMesh rotates at +0.005, so we rotate at -0.015 relative to parent
                 // to get a clear opposite rotation in world space.
-                lantern.rotation.y -= 0.020;
+                lantern.rotation.y -= 0.015;
             });
 
             colorLerpT += COLOR_CHANGE_SPEED;
