@@ -22,7 +22,6 @@ export default function ARScene() {
     useEffect(() => {
 
         const canvas = canvasRef.current;
-
         if (!canvas) return;
 
         console.log("Canvas found, starting engine");
@@ -78,81 +77,76 @@ export default function ARScene() {
         gui.addControl(text);
 
         // =========================
-        // XR SETUP
+        // XR SETUP (SAFE FIX)
         // =========================
 
         const setupXR = async () => {
 
-            const xr = await scene.createDefaultXRExperienceAsync({
-                uiOptions: {
-                    sessionMode: "immersive-ar",
-                },
-                optionalFeatures: true,
-            });
+            try {
 
-            console.log("XR ready");
+                console.log("👉 XR STARTING...");
 
-            const fm = xr.baseExperience.featuresManager;
+                const xr = await scene.createDefaultXRExperienceAsync({
+                    uiOptions: {
+                        sessionMode: "immersive-ar",
+                    },
+                    optionalFeatures: true,
+                });
 
-            // HIT TEST
-            const hitTest = fm.enableFeature(
-                BABYLON.WebXRHitTest,
-                "latest"
-            );
+                console.log("✅ XR READY");
 
-            console.log("Hit test enabled");
+                const fm = xr.baseExperience.featuresManager;
 
-            // DEBUG MARKER
-            const marker = MeshBuilder.CreateSphere(
-                "marker",
-                { diameter: 0.1 },
-                scene
-            );
+                // HIT TEST
+                const hitTest = fm.enableFeature(
+                    BABYLON.WebXRHitTest,
+                    "latest"
+                );
 
-            marker.isVisible = false;
+                console.log("✅ HIT TEST ENABLED");
 
-            // UPDATE MARKER POSITION
-            hitTest.onHitTestResultObservable.add((results: any) => {
+                // DEBUG MARKER
+                const marker = MeshBuilder.CreateSphere(
+                    "marker",
+                    { diameter: 0.1 },
+                    scene
+                );
 
-                if (results.length) {
+                marker.isVisible = false;
 
-                    const hit = results[0];
+                // UPDATE MARKER POSITION
+                hitTest.onHitTestResultObservable.add((results: any) => {
 
-                    marker.isVisible = true;
+                    if (results.length) {
 
-                    marker.position.copyFrom(hit.position);
-                }
-            });
+                        const hit = results[0];
+
+                        marker.isVisible = true;
+                        marker.position.copyFrom(hit.position);
+                    }
+                });
+
+            } catch (err) {
+
+                console.error("❌ XR FAILED TO START:", err);
+
+            }
         };
 
         setupXR();
 
-        // =========================
         // RENDER LOOP
-        // =========================
-
         engine.runRenderLoop(() => {
             scene.render();
         });
 
-        // =========================
         // RESIZE
-        // =========================
-
-        const resize = () => {
-            engine.resize();
-        };
-
+        const resize = () => engine.resize();
         window.addEventListener("resize", resize);
 
-        // =========================
         // CLEANUP
-        // =========================
-
         return () => {
-
             window.removeEventListener("resize", resize);
-
             engine.dispose();
         };
 
