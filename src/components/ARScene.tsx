@@ -62,10 +62,7 @@ export default function ARScene() {
 
         light.intensity = 2.2;
 
-        // =========================
-        // GUI TEXT
-        // =========================
-
+        // GUI
         const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
 
         const text = new GUI.TextBlock();
@@ -77,15 +74,17 @@ export default function ARScene() {
         gui.addControl(text);
 
         // =========================
-        // STEP 1 — MODEL VARIABLE
+        // STEP 1 — VARIABLES (YOUR PART - OK)
         // =========================
 
         let rootMesh: BABYLON.AbstractMesh | null = null;
-
         let marker: BABYLON.Mesh | null = null;
 
+        let mainLantern: BABYLON.AbstractMesh | null = null;
+        const subLanterns: BABYLON.AbstractMesh[] = [];
+
         // =========================
-        // STEP 2 — LOAD MODEL FUNCTION
+        // STEP 2 — LOAD MODEL
         // =========================
 
         const loadModel = () => {
@@ -101,10 +100,25 @@ export default function ARScene() {
 
                     rootMesh = meshes[0];
 
-                    // STEP 3 — SCALE + INITIAL POSITION
-                    rootMesh.scaling = new Vector3(1, 1, 1);
+                    rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
                     rootMesh.position = new Vector3(0, 0, 2);
 
+                    // =========================
+                    // STEP 3 — ASSIGN MESHES (IMPORTANT FIX)
+                    // =========================
+
+                    meshes.forEach((mesh) => {
+
+                        // MAIN LANTERN
+                        if (mesh.name === "Mesh_0") {
+                            mainLantern = mesh;
+                        }
+
+                        // SUB LANTERNS
+                        if (mesh.name.startsWith("sublantern")) {
+                            subLanterns.push(mesh);
+                        }
+                    });
                 }
             );
         };
@@ -130,7 +144,6 @@ export default function ARScene() {
 
                 const fm = xr.baseExperience.featuresManager;
 
-                // HIT TEST
                 const hitTest = fm.enableFeature(
                     BABYLON.WebXRHitTest,
                     "latest"
@@ -138,10 +151,8 @@ export default function ARScene() {
 
                 console.log("✅ HIT TEST ENABLED");
 
-                // STEP 2 — LOAD MODEL AFTER XR STARTS
                 loadModel();
 
-                // MARKER
                 marker = MeshBuilder.CreateSphere(
                     "marker",
                     { diameter: 0.1 },
@@ -150,7 +161,6 @@ export default function ARScene() {
 
                 marker.isVisible = false;
 
-                // STEP 4 — MOVE MODEL ON HIT TEST
                 hitTest.onHitTestResultObservable.add((results: any) => {
 
                     if (results.length && rootMesh && marker) {
@@ -160,7 +170,6 @@ export default function ARScene() {
                         marker.isVisible = true;
                         marker.position.copyFrom(hit.position);
 
-                        // PLACE MODEL
                         rootMesh.position = marker.position.clone();
                         rootMesh.position.y += 0.3;
                     }
@@ -175,8 +184,22 @@ export default function ARScene() {
 
         setupXR();
 
-        // RENDER LOOP
+        // =========================
+        // STEP 4 — ANIMATION (NEW ADDITION)
+        // =========================
+
         engine.runRenderLoop(() => {
+
+            // MAIN LANTERN → CLOCKWISE
+            if (mainLantern) {
+                mainLantern.rotation.y += 0.003;
+            }
+
+            // SUB LANTERNS → COUNTER CLOCKWISE
+            subLanterns.forEach((lantern) => {
+                lantern.rotation.y -= 0.005;
+            });
+
             scene.render();
         });
 
