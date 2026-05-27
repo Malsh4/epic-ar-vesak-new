@@ -174,8 +174,10 @@ export default function ARScene() {
 
                 meshes.forEach((mesh) => {
                     mesh.parent = parent;
-                    if (mesh.name.startsWith("sublantern")) {
+                    console.log("Found mesh:", mesh.name);
+                    if (mesh.name.toLowerCase().includes("sublantern")) {
                         subLanterns.push(mesh);
+                        console.log("Added to subLanterns:", mesh.name);
                     }
                 });
 
@@ -261,7 +263,10 @@ export default function ARScene() {
             }
 
             subLanterns.forEach((lantern) => {
-                lantern.rotation.y -= 0.030;
+                // Rotate in opposite direction of rootMesh
+                // rootMesh rotates at +0.005, so we rotate at -0.015 relative to parent
+                // to get a clear opposite rotation in world space.
+                lantern.rotation.y -= 0.020;
             });
 
             colorLerpT += COLOR_CHANGE_SPEED;
