@@ -97,9 +97,10 @@ export default function ARScene() {
     const [showSplash, setShowSplash] = useState(true);
     const [fading, setFading] = useState(false);
     const engineStarted = useRef(false);
-
-    // ── STEP 2: Audio ref ──
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // ── Ref to hold the XR experience so we can call enterXRAsync from handleEnter ──
+    const xrRef = useRef<BABYLON.WebXRDefaultExperience | null>(null);
 
     useEffect(() => {
         if (showSplash || engineStarted.current) return;
@@ -200,9 +201,18 @@ export default function ARScene() {
                 console.log("👉 XR STARTING...");
 
                 const xr = await scene.createDefaultXRExperienceAsync({
-                    uiOptions: { sessionMode: "immersive-ar" },
+                    uiOptions: {
+                        sessionMode: "immersive-ar",
+                        // ── Hide the default Babylon glasses button ──
+                        ignoreNativeCameraTransformation: true,
+                        renderTarget: scene.activeCamera,
+                    },
                     optionalFeatures: true,
+                    disableDefaultUI: true, // ← hides the glasses button entirely
                 });
+
+                // ── Store XR ref so handleEnter can trigger it ──
+                xrRef.current = xr;
 
                 console.log("✅ XR READY");
 
@@ -280,7 +290,6 @@ export default function ARScene() {
         const resize = () => engine.resize();
         window.addEventListener("resize", resize);
 
-        // ── STEP 4: Cleanup audio on unmount ──
         return () => {
             window.removeEventListener("resize", resize);
             engine.dispose();
@@ -294,22 +303,58 @@ export default function ARScene() {
 
     }, [showSplash]);
 
-    // ── STEP 3: Start audio on tap (must be inside user gesture) ──
-    const handleEnter = () => {
+    // =========================
+    // HANDLE ENTER — tap on splash
+    // =========================
+    const handleEnter = async () => {
 
+        // START AUDIO — must be inside user gesture
         if (!audioRef.current) {
+            console.log("Initializing audio with path: /audio/vesakSong.mp3");
             audioRef.current = new Audio("/audio/vesakSong.mp3");
             audioRef.current.loop = true;
             audioRef.current.volume = 0.5;
-        }
-        audioRef.current.play().catch((err) => {
-            console.warn("Audio play failed:", err);
-        });
 
+            audioRef.current.onerror = (e) => {
+                console.error("Audio loading error:", e);
+            };
+
+            audioRef.current.oncanplaythrough = () => {
+                console.log("Audio is ready to play");
+            };
+        }
+        audioRef.current.play()
+            .then(() => {
+                console.log("Audio started playing successfully");
+            })
+            .catch((err) => {
+                console.warn("Audio play failed:", err);
+            });
+
+        // FADE OUT SPLASH
         setFading(true);
         setTimeout(() => {
             setShowSplash(false);
-            setTimeout(() => setFading(false), 900);
+            setTimeout(async () => {
+                setFading(false);
+
+                // ── AUTO ENTER AR — use the same gesture chain ──
+                // Small delay to ensure canvas is visible before entering XR
+                setTimeout(async () => {
+                    try {
+                        if (xrRef.current) {
+                            await xrRef.current.baseExperience.enterXRAsync(
+                                "immersive-ar",
+                                "local-floor"
+                            );
+                            console.log("✅ AR ENTERED DIRECTLY");
+                        }
+                    } catch (err) {
+                        console.warn("⚠️ Direct AR entry failed, user may need to tap again:", err);
+                    }
+                }, 300);
+
+            }, 900);
         }, 400);
     };
 
