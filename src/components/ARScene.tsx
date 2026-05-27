@@ -10,6 +10,7 @@ import {
     Vector3,
     Color4,
     MeshBuilder,
+    SceneLoader,
 } from "@babylonjs/core";
 
 import "@babylonjs/loaders";
@@ -38,7 +39,6 @@ export default function ARScene() {
         // SCENE
         const scene = new Scene(engine);
 
-        // BLACK BACKGROUND
         scene.clearColor = new Color4(0, 0, 0, 1);
 
         // CAMERA
@@ -77,7 +77,40 @@ export default function ARScene() {
         gui.addControl(text);
 
         // =========================
-        // XR SETUP (SAFE FIX)
+        // STEP 1 — MODEL VARIABLE
+        // =========================
+
+        let rootMesh: BABYLON.AbstractMesh | null = null;
+
+        let marker: BABYLON.Mesh | null = null;
+
+        // =========================
+        // STEP 2 — LOAD MODEL FUNCTION
+        // =========================
+
+        const loadModel = () => {
+
+            SceneLoader.ImportMesh(
+                "",
+                "/models/",
+                "VLSSL.glb",
+                scene,
+                (meshes) => {
+
+                    console.log("MODEL LOADED:", meshes);
+
+                    rootMesh = meshes[0];
+
+                    // STEP 3 — SCALE + INITIAL POSITION
+                    rootMesh.scaling = new Vector3(0.3, 0.3, 0.3);
+                    rootMesh.position = new Vector3(0, 0, 2);
+
+                }
+            );
+        };
+
+        // =========================
+        // XR SETUP
         // =========================
 
         const setupXR = async () => {
@@ -105,8 +138,11 @@ export default function ARScene() {
 
                 console.log("✅ HIT TEST ENABLED");
 
-                // DEBUG MARKER
-                const marker = MeshBuilder.CreateSphere(
+                // STEP 2 — LOAD MODEL AFTER XR STARTS
+                loadModel();
+
+                // MARKER
+                marker = MeshBuilder.CreateSphere(
                     "marker",
                     { diameter: 0.1 },
                     scene
@@ -114,15 +150,19 @@ export default function ARScene() {
 
                 marker.isVisible = false;
 
-                // UPDATE MARKER POSITION
+                // STEP 4 — MOVE MODEL ON HIT TEST
                 hitTest.onHitTestResultObservable.add((results: any) => {
 
-                    if (results.length) {
+                    if (results.length && rootMesh && marker) {
 
                         const hit = results[0];
 
                         marker.isVisible = true;
                         marker.position.copyFrom(hit.position);
+
+                        // PLACE MODEL
+                        rootMesh.position = marker.position.clone();
+                        rootMesh.position.y += 0.3;
                     }
                 });
 
@@ -144,7 +184,6 @@ export default function ARScene() {
         const resize = () => engine.resize();
         window.addEventListener("resize", resize);
 
-        // CLEANUP
         return () => {
             window.removeEventListener("resize", resize);
             engine.dispose();
