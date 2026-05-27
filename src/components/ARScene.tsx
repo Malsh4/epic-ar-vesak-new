@@ -74,17 +74,19 @@ export default function ARScene() {
         gui.addControl(text);
 
         // =========================
-        // STEP 1 — VARIABLES (YOUR PART - OK)
+        // VARIABLES
         // =========================
 
         let rootMesh: BABYLON.AbstractMesh | null = null;
+
         let marker: BABYLON.Mesh | null = null;
 
         let mainLantern: BABYLON.AbstractMesh | null = null;
+
         const subLanterns: BABYLON.AbstractMesh[] = [];
 
         // =========================
-        // STEP 2 — LOAD MODEL
+        // LOAD MODEL
         // =========================
 
         const loadModel = () => {
@@ -98,27 +100,47 @@ export default function ARScene() {
 
                     console.log("MODEL LOADED:", meshes);
 
-                    rootMesh = meshes[0];
+                    // IMPORTANT FIX
+                    rootMesh = meshes[meshes.length - 1];
 
+                    if (!rootMesh) return;
+
+                    // SCALE
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
+
+                    // START POSITION
                     rootMesh.position = new Vector3(0, 0, 2);
 
                     // =========================
-                    // STEP 3 — ASSIGN MESHES (IMPORTANT FIX)
+                    // MESH DETECTION FIX
                     // =========================
 
                     meshes.forEach((mesh) => {
 
+                        console.log("MESH NAME:", mesh.name);
+
                         // MAIN LANTERN
-                        if (mesh.name === "Mesh_0") {
+                        if (
+                            mesh.name
+                                .toLowerCase()
+                                .includes("mesh")
+                        ) {
                             mainLantern = mesh;
                         }
 
                         // SUB LANTERNS
-                        if (mesh.name.startsWith("sublantern")) {
+                        if (
+                            mesh.name
+                                .toLowerCase()
+                                .includes("sublantern")
+                        ) {
                             subLanterns.push(mesh);
                         }
                     });
+
+                    console.log("MAIN:", mainLantern);
+
+                    console.log("SUB COUNT:", subLanterns.length);
                 }
             );
         };
@@ -144,6 +166,7 @@ export default function ARScene() {
 
                 const fm = xr.baseExperience.featuresManager;
 
+                // HIT TEST
                 const hitTest = fm.enableFeature(
                     BABYLON.WebXRHitTest,
                     "latest"
@@ -151,8 +174,10 @@ export default function ARScene() {
 
                 console.log("✅ HIT TEST ENABLED");
 
+                // LOAD MODEL
                 loadModel();
 
+                // MARKER
                 marker = MeshBuilder.CreateSphere(
                     "marker",
                     { diameter: 0.1 },
@@ -161,6 +186,7 @@ export default function ARScene() {
 
                 marker.isVisible = false;
 
+                // PLACE MODEL
                 hitTest.onHitTestResultObservable.add((results: any) => {
 
                     if (results.length && rootMesh && marker) {
@@ -168,9 +194,11 @@ export default function ARScene() {
                         const hit = results[0];
 
                         marker.isVisible = true;
+
                         marker.position.copyFrom(hit.position);
 
                         rootMesh.position = marker.position.clone();
+
                         rootMesh.position.y += 0.3;
                     }
                 });
@@ -185,31 +213,51 @@ export default function ARScene() {
         setupXR();
 
         // =========================
-        // STEP 4 — ANIMATION (NEW ADDITION)
+        // ANIMATION FIX
         // =========================
 
         engine.runRenderLoop(() => {
 
-            // MAIN LANTERN → CLOCKWISE
-            if (mainLantern) {
-                mainLantern.rotation.y += 0.003;
+            // ROTATE WHOLE MODEL
+            if (rootMesh) {
+                rootMesh.rotation.y += 0.01;
             }
 
-            // SUB LANTERNS → COUNTER CLOCKWISE
+            // MAIN LANTERN
+            if (mainLantern) {
+
+                mainLantern.rotation.y += 0.003;
+
+            }
+
+            // SUB LANTERNS
             subLanterns.forEach((lantern) => {
+
                 lantern.rotation.y -= 0.005;
+
             });
 
             scene.render();
         });
 
+        // =========================
         // RESIZE
+        // =========================
+
         const resize = () => engine.resize();
+
         window.addEventListener("resize", resize);
 
+        // =========================
+        // CLEANUP
+        // =========================
+
         return () => {
+
             window.removeEventListener("resize", resize);
+
             engine.dispose();
+
         };
 
     }, []);
