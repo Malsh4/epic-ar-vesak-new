@@ -15,6 +15,7 @@ import {
 } from "@babylonjs/core";
 
 import "@babylonjs/loaders";
+import * as GUI from "@babylonjs/gui";
 
 export default function ARScene() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -61,6 +62,15 @@ export default function ARScene() {
 
         light.intensity = 2.2;
 
+        const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+        const text = new GUI.TextBlock();
+
+        text.text = "Happy Vesak!";
+        text.color = "white";
+        text.fontSize = 48;
+
+        gui.addControl(text);
         // MODEL
         let rootMesh: Mesh | null = null;
 
@@ -68,35 +78,6 @@ export default function ARScene() {
         let marker: Mesh | null = null;
 
         // LOAD MODEL
-        SceneLoader.ImportMesh(
-            "",
-            "/models/",
-            "VLSSL.glb",
-            scene,
-            (meshes) => {
-
-                rootMesh = meshes[0] as Mesh;
-
-                // SCALE
-                rootMesh.scaling = new Vector3(0.25, 0.25, 0.25);
-
-                // START POSITION
-                rootMesh.position = new Vector3(0, -100, 0);
-
-                // GLOW MATERIALS
-                meshes.forEach((mesh: any) => {
-
-                    if (mesh.material) {
-
-                        mesh.material.emissiveColor =
-                            new BABYLON.Color3(1, 0.5, 0);
-
-                    }
-                });
-
-                console.log("VLSSL model loaded");
-            }
-        );
 
         // =========================
         // XR SETUP (REAL FIX)
