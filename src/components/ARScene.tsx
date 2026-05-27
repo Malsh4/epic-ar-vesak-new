@@ -100,47 +100,56 @@ export default function ARScene() {
 
                     console.log("MODEL LOADED:", meshes);
 
-                    // IMPORTANT FIX
-                    rootMesh = meshes[meshes.length - 1];
+                    // CREATE PARENT NODE
+                    const parent = new BABYLON.TransformNode(
+                        "modelParent",
+                        scene
+                    );
 
-                    if (!rootMesh) return;
-
-                    // SCALE
-                    rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
-
-                    // START POSITION
-                    rootMesh.position = new Vector3(0, 0, 2);
-
-                    // =========================
-                    // MESH DETECTION FIX
-                    // =========================
-
+                    // ATTACH ALL MESHES TO PARENT
                     meshes.forEach((mesh) => {
 
                         console.log("MESH NAME:", mesh.name);
 
+                        mesh.parent = parent;
+
                         // MAIN LANTERN
-                        if (
-                            mesh.name
-                                .toLowerCase()
-                                .includes("mesh")
-                        ) {
+                        if (mesh.name === "Mesh_0") {
                             mainLantern = mesh;
                         }
 
                         // SUB LANTERNS
-                        if (
-                            mesh.name
-                                .toLowerCase()
-                                .includes("sublantern")
-                        ) {
+                        if (mesh.name.startsWith("sublantern")) {
                             subLanterns.push(mesh);
                         }
                     });
 
+                    // USE PARENT AS ROOT
+                    rootMesh = parent as any;
+
+                    // SCALE
+                    if (rootMesh) {
+
+                        rootMesh.scaling = new Vector3(
+                            0.5,
+                            0.5,
+                            0.5
+                        );
+
+                        // START POSITION
+                        rootMesh.position = new Vector3(
+                            0,
+                            0,
+                            2
+                        );
+                    }
+
                     console.log("MAIN:", mainLantern);
 
-                    console.log("SUB COUNT:", subLanterns.length);
+                    console.log(
+                        "SUB COUNT:",
+                        subLanterns.length
+                    );
                 }
             );
         };
@@ -189,7 +198,12 @@ export default function ARScene() {
                 // PLACE MODEL
                 hitTest.onHitTestResultObservable.add((results: any) => {
 
-                    if (results.length && rootMesh && marker) {
+                    if (
+                        results.length &&
+                        rootMesh &&
+                        marker &&
+                        !modelPlaced
+                    ) {
 
                         const hit = results[0];
 
@@ -197,9 +211,14 @@ export default function ARScene() {
 
                         marker.position.copyFrom(hit.position);
 
+                        // PLACE ONLY ONCE
                         rootMesh.position = marker.position.clone();
 
                         rootMesh.position.y += 0.3;
+
+                        modelPlaced = true;
+
+                        console.log("MODEL PLACED");
                     }
                 });
 
@@ -209,7 +228,7 @@ export default function ARScene() {
 
             }
         };
-
+        let modelPlaced = false;
         setupXR();
 
         // =========================
@@ -220,26 +239,20 @@ export default function ARScene() {
 
             // ROTATE WHOLE MODEL
             if (rootMesh) {
-                rootMesh.rotation.y += 0.01;
-            }
 
-            // MAIN LANTERN
-            if (mainLantern) {
-
-                mainLantern.rotation.y += 0.003;
+                rootMesh.rotation.y += 0.003;
 
             }
 
-            // SUB LANTERNS
+            // SUBLANTERNS REVERSE ROTATION
             subLanterns.forEach((lantern) => {
 
-                lantern.rotation.y -= 0.005;
+                lantern.rotation.y -= 0.01;
 
             });
 
             scene.render();
         });
-
         // =========================
         // RESIZE
         // =========================
