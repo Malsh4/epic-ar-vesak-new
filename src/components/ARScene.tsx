@@ -158,6 +158,7 @@ export default function ARScene() {
         // VARIABLES
         let rootMesh: BABYLON.AbstractMesh | null = null;
         let marker: BABYLON.Mesh | null = null;
+        const subLanterns: BABYLON.AbstractMesh[] = [];
         let modelPlaced = false;
 
         // =========================
@@ -169,16 +170,22 @@ export default function ARScene() {
 
                 const parent = new BABYLON.TransformNode("modelParent", scene);
 
-                // ✅ ALL meshes parented — no individual rotation on any child
                 meshes.forEach((mesh) => {
+                    // All meshes parented to root — move together as one unit
                     mesh.parent = parent;
-                    console.log("Mesh:", mesh.name);
+
+                    if (mesh.name.toLowerCase().includes("sublantern")) {
+                        // ✅ Nullify quaternion so rotation.y works on each sub-lantern
+                        mesh.rotationQuaternion = null;
+                        subLanterns.push(mesh);
+                        console.log("Sub-lantern:", mesh.name);
+                    }
                 });
 
                 rootMesh = parent as any;
 
                 if (rootMesh) {
-                    // Nullify quaternion so rotation.y works on parent
+                    // Nullify quaternion on parent so rotation.y works
                     (rootMesh as any).rotationQuaternion = null;
 
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
@@ -188,7 +195,7 @@ export default function ARScene() {
                     colorLight.position.y += 0.5;
                 }
 
-                console.log("TOTAL MESHES:", meshes.length);
+                console.log("SUB COUNT:", subLanterns.length);
             });
         };
 
@@ -250,11 +257,18 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
-            // ✅ ONLY rotate the parent — all children (main + 8 sub-lanterns)
-            // rotate together automatically as one solid unit
+            // Rotate entire model (main + all sub-lanterns move together)
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
+
+            // ✅ Sub-lanterns spin on their own Y axis only
+            // Position does NOT change — they stay exactly where they are
+            // in the model. Only their local Y rotation increments.
+            // Same direction as main mesh (+0.020) for a natural spin look.
+            subLanterns.forEach((lantern) => {
+                lantern.rotation.y += 0.020;
+            });
 
             // COLOUR LIGHT ANIMATION
             colorLerpT += COLOR_CHANGE_SPEED;
