@@ -98,8 +98,6 @@ export default function ARScene() {
     const [fading, setFading] = useState(false);
     const engineStarted = useRef(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-
-    // ── Ref to hold the XR experience so we can call enterXRAsync from handleEnter ──
     const xrRef = useRef<BABYLON.WebXRDefaultExperience | null>(null);
 
     useEffect(() => {
@@ -174,17 +172,25 @@ export default function ARScene() {
 
                 meshes.forEach((mesh) => {
                     mesh.parent = parent;
-                    console.log("Found mesh:", mesh.name);
                     if (mesh.name.toLowerCase().includes("sublantern")) {
                         subLanterns.push(mesh);
-                        mesh.rotationQuaternion = null; // Enable Euler rotation
-                        console.log("Added to subLanterns and nullified quaternion:", mesh.name);
+
+                        // ✅ FIX 1 — nullify quaternion on sub-lanterns
+                        // so rotation.y works correctly
+                        mesh.rotationQuaternion = null;
+
+                        console.log("Sub-lantern added:", mesh.name);
                     }
                 });
 
                 rootMesh = parent as any;
 
                 if (rootMesh) {
+                    // ✅ FIX 1 — also nullify quaternion on rootMesh (parent)
+                    // GLB loader sets rotationQuaternion by default which
+                    // overrides rotation.y — must be null for Euler to work
+                    (rootMesh as any).rotationQuaternion = null;
+
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
                     rootMesh.position = new Vector3(0, 0, 2);
 
@@ -204,14 +210,11 @@ export default function ARScene() {
                 console.log("👉 XR STARTING...");
 
                 const xr = await scene.createDefaultXRExperienceAsync({
-                    uiOptions: {
-                        sessionMode: "immersive-ar",
-                    },
+                    uiOptions: { sessionMode: "immersive-ar" },
                     optionalFeatures: true,
-                    disableDefaultUI: true, // ← hides the glasses button entirely
+                    disableDefaultUI: true,
                 });
 
-                // ── Store XR ref so handleEnter can trigger it ──
                 xrRef.current = xr;
 
                 console.log("✅ XR READY");
@@ -259,17 +262,21 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
+            // Main mesh — slow clockwise rotation
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
 
+            // ✅ FIX 2 — correct counter-rotation formula:
+            // We want sub-lanterns to spin OPPOSITE to parent in world space.
+            // Parent adds +0.005 to child automatically (they are parented).
+            // So local rotation must cancel parent AND add own spin:
+            //   local -0.030 + parent +0.005 = net world -0.025 (opposite) ✅
             subLanterns.forEach((lantern) => {
-                // Rotate in opposite direction of rootMesh
-                // rootMesh rotates at +0.005, so we rotate at -0.015 relative to parent
-                // to get a clear opposite rotation in world space.
-                lantern.rotation.y -= 0.040; // Increased speed for better visibility
+                lantern.rotation.y -= 0.030;
             });
 
+            // COLOUR LIGHT ANIMATION
             colorLerpT += COLOR_CHANGE_SPEED;
 
             if (colorLerpT >= 1) {
@@ -307,42 +314,25 @@ export default function ARScene() {
     }, [showSplash]);
 
     // =========================
-    // HANDLE ENTER — tap on splash
+    // HANDLE ENTER
     // =========================
     const handleEnter = async () => {
 
-        // START AUDIO — must be inside user gesture
         if (!audioRef.current) {
-            console.log("Initializing audio with path: /audio/vesakSong.mp3");
             audioRef.current = new Audio("/audio/vesakSong.mp3");
             audioRef.current.loop = true;
             audioRef.current.volume = 0.5;
-
-            audioRef.current.onerror = (e) => {
-                console.error("Audio loading error:", e);
-            };
-
-            audioRef.current.oncanplaythrough = () => {
-                console.log("Audio is ready to play");
-            };
+            audioRef.current.onerror = (e) => console.error("Audio error:", e);
         }
         audioRef.current.play()
-            .then(() => {
-                console.log("Audio started playing successfully");
-            })
-            .catch((err) => {
-                console.warn("Audio play failed:", err);
-            });
+            .then(() => console.log("✅ Audio playing"))
+            .catch((err) => console.warn("⚠️ Audio play failed:", err));
 
-        // FADE OUT SPLASH
         setFading(true);
         setTimeout(() => {
             setShowSplash(false);
             setTimeout(async () => {
                 setFading(false);
-
-                // ── AUTO ENTER AR — use the same gesture chain ──
-                // Small delay to ensure canvas is visible before entering XR
                 setTimeout(async () => {
                     try {
                         if (xrRef.current) {
@@ -353,10 +343,9 @@ export default function ARScene() {
                             console.log("✅ AR ENTERED DIRECTLY");
                         }
                     } catch (err) {
-                        console.warn("⚠️ Direct AR entry failed, user may need to tap again:", err);
+                        console.warn("⚠️ Direct AR entry failed:", err);
                     }
                 }, 300);
-
             }, 900);
         }, 400);
     };
