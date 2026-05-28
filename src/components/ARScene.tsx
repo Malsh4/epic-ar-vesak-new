@@ -156,16 +156,16 @@ export default function ARScene() {
 
             const anchor = mindarThree.addAnchor(0);
 
-
             // FIXED WORLD GROUP
             const worldGroup = new THREE.Group();
             scene.add(worldGroup);
 
             const modelPlacedRef = { current: false };
+            let loadedModel: THREE.Group | null = null;
+            let subLanterns: THREE.Object3D[] = [];
 
-            // Load the GLB model
+            // Load the GLB model immediately
             const loader = new GLTFLoader();
-
             loader.load("/models/VLSSL.glb", (gltf: any) => {
                 const model = gltf.scene;
 
@@ -187,79 +187,87 @@ export default function ARScene() {
                 );
 
                 // FIND SUB LANTERNS
-                const subLanterns: THREE.Object3D[] = [];
-
                 model.traverse((obj: THREE.Object3D) => {
                     const name = obj.name.toLowerCase();
-
                     if (name.startsWith("sublantern")) {
                         subLanterns.push(obj);
                     }
                 });
 
-                // ---------------------------------------
-                // PLACE MODEL ONLY ON FIRST QR DETECTION
-                // ---------------------------------------
+                loadedModel = model;
+                console.log("Model loaded successfully");
 
-                anchor.onTargetFound = () => {
+                // If target was already found, place it now
+                if (targetFoundButNoModel) {
+                    placeModel();
+                }
+            });
 
-                    if (modelPlacedRef.current) return;
+            let targetFoundButNoModel = false;
 
-                    // Update matrices first
-                    anchor.group.updateMatrixWorld(true);
+            const placeModel = () => {
+                if (!loadedModel || modelPlacedRef.current) return;
 
-                    // Get world position only
-                    const position = new THREE.Vector3();
-                    anchor.group.getWorldPosition(position);
+                console.log("Attempting to place model...");
+                
+                // Update matrices first to get accurate world position
+                anchor.group.updateMatrixWorld(true);
 
-                    // Place world group
-                    worldGroup.position.copy(position);
+                // Get world position of the anchor
+                const position = new THREE.Vector3();
+                anchor.group.getWorldPosition(position);
 
-                    // Keep upright
-                    worldGroup.rotation.set(0, 0, 0);
+                // Place world group at that position
+                worldGroup.position.copy(position);
+                worldGroup.rotation.set(0, 0, 0);
 
-                    // Add model
-                    worldGroup.add(model);
+                // Add model to world group
+                worldGroup.add(loadedModel);
+                
+                // Hide target tracking visuals but keep the anchor active
+                anchor.group.visible = false;
 
-                    // Hide target tracking visuals
-                    anchor.group.visible = false;
+                modelPlacedRef.current = true;
+                console.log("Model placed fixed in world at:", position);
+            };
 
-                    modelPlacedRef.current = true;
+            anchor.onTargetFound = () => {
+                console.log("Target found!");
+                if (loadedModel) {
+                    placeModel();
+                } else {
+                    targetFoundButNoModel = true;
+                    console.log("Target found but model not loaded yet...");
+                }
+            };
 
-                    console.log("Placed successfully");
-                };
-                // ---------------------------------------
-                // RENDER LOOP
-                // ---------------------------------------
+            // RENDER LOOP - Starts immediately
+            renderer.setAnimationLoop(() => {
+                // ROTATE MAIN MODEL if loaded
+                if (loadedModel) {
+                    loadedModel.rotation.y += 0.005;
+                }
 
-                renderer.setAnimationLoop(() => {
-
-                    // ROTATE MAIN MODEL
-                    model.rotation.y += 0.005;
-
-                    // ROTATE SUB LANTERNS
-                    subLanterns.forEach((lantern: THREE.Object3D, index: number) => {
-                        lantern.rotation.y += index % 2 === 0 ? 0.02 : -0.02;
-                    });
-
-                    // COLOR TRANSITION
-                    lerpT += 0.008;
-
-                    if (lerpT >= 1) {
-                        lerpT = 0;
-                        colorIndex = nextColorIndex;
-                        nextColorIndex =
-                            (nextColorIndex + 1) % festiveColors.length;
-                    }
-
-                    pointLight.color.lerpColors(
-                        festiveColors[colorIndex],
-                        festiveColors[nextColorIndex],
-                        lerpT
-                    );
-
-                    renderer.render(scene, camera);
+                // ROTATE SUB LANTERNS
+                subLanterns.forEach((lantern: THREE.Object3D, index: number) => {
+                    lantern.rotation.y += index % 2 === 0 ? 0.02 : -0.02;
                 });
+
+                // COLOR TRANSITION
+                lerpT += 0.008;
+                if (lerpT >= 1) {
+                    lerpT = 0;
+                    colorIndex = nextColorIndex;
+                    nextColorIndex = (nextColorIndex + 1) % festiveColors.length;
+                }
+
+                pointLight.color.lerpColors(
+                    festiveColors[colorIndex],
+                    festiveColors[nextColorIndex],
+                    lerpT
+                );
+
+                renderer.render(scene, camera);
             });
 
             await mindarThree.start();
