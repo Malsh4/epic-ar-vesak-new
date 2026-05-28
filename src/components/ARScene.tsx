@@ -125,8 +125,8 @@ export default function ARScene() {
             mindarThree = new MindARThree({
                 container: containerRef.current,
                 imageTargetSrc: "/targets/vesak.mind",
-                filterMinCF: 0.0001,
-                filterBeta: 0.001,
+                filterMinCF: 0.01,
+                filterBeta: 0.01,
                 missTolerance: 10,
                 warmupTolerance: 5,
             });
@@ -156,69 +156,116 @@ export default function ARScene() {
 
             const anchor = mindarThree.addAnchor(0);
 
-            // Create an upright container group to map target flat plane (X-Y) to vertical 3D space
-            const modelContainer = new THREE.Group();
-            modelContainer.rotation.x = Math.PI / 2;
-            anchor.group.add(modelContainer);
+
+            // FIXED WORLD GROUP
+            const worldGroup = new THREE.Group();
+            scene.add(worldGroup);
+
+            const modelPlacedRef = useRef(false);
+            if (modelPlacedRef.current) return;
+
+            modelPlacedRef.current = true;
 
             // Load the GLB model
             const loader = new GLTFLoader();
-            loader.load(
-                "/models/VLSSL.glb",
-                (gltf: any) => {
-                    const model = gltf.scene;
 
-                    // Make the model 3x bigger (original was 0.4, 0.4 * 3 = 1.2)
-                    model.scale.set(1.2, 1.2, 1.2);
+            loader.load("/models/VLSSL.glb", (gltf: any) => {
+                const model = gltf.scene;
 
-                    // Auto-align model's base flush with the QR ground plane (Y = 0)
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = new THREE.Vector3();
-                    box.getCenter(center);
+                // SCALE MODEL
+                model.scale.set(1.2, 1.2, 1.2);
 
-                    model.position.x = -center.x;
-                    model.position.z = -center.z;
-                    model.position.y = -box.min.y;
+                // CENTER MODEL
+                const box = new THREE.Box3().setFromObject(model);
+                const center = new THREE.Vector3();
+                box.getCenter(center);
 
-                    modelContainer.add(model);
+                model.position.x = -center.x;
+                model.position.z = -center.z;
+                model.position.y = -box.min.y;
 
-                    // Find sub-lanterns inside model
-                    const subLanterns: THREE.Object3D[] = [];
-                    model.traverse((obj: THREE.Object3D) => {
-                        const name = obj.name.toLowerCase();
-                        if (name.startsWith("sublantern")) {
-                            subLanterns.push(obj);
-                        }
+                // ROTATE TARGET PLANE TO WORLD SPACE
+                model.quaternion.setFromEuler(
+                    new THREE.Euler(Math.PI / 2, 0, 0)
+                );
+
+                // FIND SUB LANTERNS
+                const subLanterns: THREE.Object3D[] = [];
+
+                model.traverse((obj: THREE.Object3D) => {
+                    const name = obj.name.toLowerCase();
+
+                    if (name.startsWith("sublantern")) {
+                        subLanterns.push(obj);
+                    }
+                });
+
+                // ---------------------------------------
+                // PLACE MODEL ONLY ON FIRST QR DETECTION
+                // ---------------------------------------
+
+                anchor.onTargetFound = () => {
+                    if (modelPlaced) return;
+
+                    // UPDATE WORLD MATRICES
+                    anchor.group.updateWorldMatrix(true, true);
+
+                    // GET WORLD POSITION
+                    const worldPosition = new THREE.Vector3();
+                    const worldQuaternion = new THREE.Quaternion();
+                    const worldScale = new THREE.Vector3();
+
+                    anchor.group.matrixWorld.decompose(
+                        worldPosition,
+                        worldQuaternion,
+                        worldScale
+                    );
+
+                    worldGroup.position.copy(worldPosition);
+                    worldGroup.quaternion.copy(worldQuaternion);
+                    worldGroup.scale.copy(worldScale);
+
+                    // ADD MODEL ONLY ONCE
+                    worldGroup.add(model);
+
+                    modelPlaced = true;
+
+                    console.log("Model fixed in world space");
+                };
+
+                // ---------------------------------------
+                // RENDER LOOP
+                // ---------------------------------------
+
+                renderer.setAnimationLoop(() => {
+
+                    // ROTATE MAIN MODEL
+                    model.rotation.y += 0.005;
+
+                    // ROTATE SUB LANTERNS
+                    subLanterns.forEach((lantern: THREE.Object3D, index: number) => {
+                        lantern.rotation.y += index % 2 === 0 ? 0.02 : -0.02;
                     });
 
-                    // Start render loop
-                    renderer.setAnimationLoop(() => {
-                        // Smooth spin whole lantern around vertical axis
-                        model.rotation.y += 0.005;
+                    // COLOR TRANSITION
+                    lerpT += 0.008;
 
-                        // Rotate sub lanterns in alternating directions
-                        subLanterns.forEach((lantern: THREE.Object3D, index: number) => {
-                            lantern.rotation.y += index % 2 === 0 ? 0.02 : -0.02;
-                        });
+                    if (lerpT >= 1) {
+                        lerpT = 0;
+                        colorIndex = nextColorIndex;
+                        nextColorIndex =
+                            (nextColorIndex + 1) % festiveColors.length;
+                    }
 
-                        // Beautiful color light pulsing transition
-                        lerpT += 0.008;
-                        if (lerpT >= 1) {
-                            lerpT = 0;
-                            colorIndex = nextColorIndex;
-                            nextColorIndex = (nextColorIndex + 1) % festiveColors.length;
-                        }
+                    pointLight.color.lerpColors(
+                        festiveColors[colorIndex],
+                        festiveColors[nextColorIndex],
+                        lerpT
+                    );
 
-                        pointLight.color.lerpColors(
-                            festiveColors[colorIndex],
-                            festiveColors[nextColorIndex],
-                            lerpT
-                        );
-
-                        renderer.render(scene, camera);
-                    });
-                }
-            );
+                    renderer.render(scene, camera);
+                });
+            });
 
             await mindarThree.start();
         };
@@ -228,6 +275,10 @@ export default function ARScene() {
         return () => {
             if (mindarThree) {
                 mindarThree.stop();
+
+                if (mindarThree.renderer) {
+                    mindarThree.renderer.dispose();
+                }
             }
         };
     }, [started]);
