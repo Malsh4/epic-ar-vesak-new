@@ -158,7 +158,6 @@ export default function ARScene() {
         // VARIABLES
         let rootMesh: BABYLON.AbstractMesh | null = null;
         let marker: BABYLON.Mesh | null = null;
-        const subLanterns: BABYLON.AbstractMesh[] = [];
         let modelPlaced = false;
 
         // =========================
@@ -170,22 +169,16 @@ export default function ARScene() {
 
                 const parent = new BABYLON.TransformNode("modelParent", scene);
 
+                // ✅ ALL meshes parented — no individual rotation on any child
                 meshes.forEach((mesh) => {
                     mesh.parent = parent;
-                    if (mesh.name.toLowerCase().includes("sublantern")) {
-                        subLanterns.push(mesh);
-
-                        // Nullify quaternion so rotation.y works on sub-lanterns
-                        mesh.rotationQuaternion = null;
-
-                        console.log("Sub-lantern added:", mesh.name);
-                    }
+                    console.log("Mesh:", mesh.name);
                 });
 
                 rootMesh = parent as any;
 
                 if (rootMesh) {
-                    // Nullify quaternion on parent so rotation.y works
+                    // Nullify quaternion so rotation.y works on parent
                     (rootMesh as any).rotationQuaternion = null;
 
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
@@ -195,7 +188,7 @@ export default function ARScene() {
                     colorLight.position.y += 0.5;
                 }
 
-                console.log("SUB COUNT:", subLanterns.length);
+                console.log("TOTAL MESHES:", meshes.length);
             });
         };
 
@@ -257,19 +250,11 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
-            // Main mesh — rotates clockwise
+            // ✅ ONLY rotate the parent — all children (main + 8 sub-lanterns)
+            // rotate together automatically as one solid unit
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
-
-            // ✅ THE FIX — sub-lanterns self-spin on own axis only
-            // Parenting already makes them move WITH the main mesh
-            // at same speed and direction automatically.
-            // This local rotation is purely their own self-spin (opposite direction).
-            // net world = local(-0.025) + parent(+0.005) = -0.020 opposite ✅
-            subLanterns.forEach((lantern) => {
-                lantern.rotation.y -= 0.025;
-            });
 
             // COLOUR LIGHT ANIMATION
             colorLerpT += COLOR_CHANGE_SPEED;
