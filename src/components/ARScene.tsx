@@ -175,8 +175,7 @@ export default function ARScene() {
                     if (mesh.name.toLowerCase().includes("sublantern")) {
                         subLanterns.push(mesh);
 
-                        // ✅ FIX 1 — nullify quaternion on sub-lanterns
-                        // so rotation.y works correctly
+                        // Nullify quaternion so rotation.y works on sub-lanterns
                         mesh.rotationQuaternion = null;
 
                         console.log("Sub-lantern added:", mesh.name);
@@ -186,9 +185,7 @@ export default function ARScene() {
                 rootMesh = parent as any;
 
                 if (rootMesh) {
-                    // ✅ FIX 1 — also nullify quaternion on rootMesh (parent)
-                    // GLB loader sets rotationQuaternion by default which
-                    // overrides rotation.y — must be null for Euler to work
+                    // Nullify quaternion on parent so rotation.y works
                     (rootMesh as any).rotationQuaternion = null;
 
                     rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
@@ -216,12 +213,10 @@ export default function ARScene() {
                 });
 
                 xrRef.current = xr;
-
                 console.log("✅ XR READY");
 
                 const fm = xr.baseExperience.featuresManager;
                 const hitTest = fm.enableFeature(BABYLON.WebXRHitTest, "latest");
-
                 console.log("✅ HIT TEST ENABLED");
 
                 loadModel();
@@ -262,18 +257,18 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
-            // Main mesh — slow clockwise rotation
+            // Main mesh — rotates clockwise
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
 
-            // ✅ FIX 2 — correct counter-rotation formula:
-            // We want sub-lanterns to spin OPPOSITE to parent in world space.
-            // Parent adds +0.005 to child automatically (they are parented).
-            // So local rotation must cancel parent AND add own spin:
-            //   local -0.030 + parent +0.005 = net world -0.025 (opposite) ✅
+            // ✅ THE FIX — sub-lanterns self-spin on own axis only
+            // Parenting already makes them move WITH the main mesh
+            // at same speed and direction automatically.
+            // This local rotation is purely their own self-spin (opposite direction).
+            // net world = local(-0.025) + parent(+0.005) = -0.020 opposite ✅
             subLanterns.forEach((lantern) => {
-                lantern.rotation.y -= 0.030;
+                lantern.rotation.y -= 0.025;
             });
 
             // COLOUR LIGHT ANIMATION
