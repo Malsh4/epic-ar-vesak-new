@@ -92,17 +92,17 @@ function FadeOverlay({ visible }: { visible: boolean }) {
     );
 }
 
-// Individual spin speed for each named sub-lantern.
-// Positive = clockwise, negative = counter-clockwise (local Y axis).
+// Individual spin speed for each sub-lantern (local Y axis, Blender pivot corrected).
+// Positive = counter-clockwise, negative = clockwise when viewed from above.
 const SUB_LANTERN_SPEEDS: Record<string, number> = {
-    sublantern1: 0.018,
-    sublantern2: -0.022,
-    sublantern3: 0.030,
-    sublantern4: -0.016,
-    sublantern5: 0.025,
-    sublantern6: -0.012,
-    sublantern7: 0.020,
-    sublantern8: -0.028,
+    sublantern1: 0.018,   // top ring — slow forward
+    sublantern2: -0.022,   // top ring — slow reverse
+    sublantern3: 0.030,   // top ring — fast forward
+    sublantern4: -0.016,   // top ring — slow reverse
+    sublantern5: 0.025,   // bottom ring — medium forward
+    sublantern6: -0.028,   // bottom ring — fast reverse
+    sublantern7: 0.020,   // bottom ring — medium forward
+    sublantern8: -0.014,   // bottom ring — slow reverse
 };
 
 export default function ARScene() {
@@ -173,8 +173,14 @@ export default function ARScene() {
         let marker: BABYLON.Mesh | null = null;
         let modelPlaced = false;
 
-        // Map of sub-lantern name → pivot TransformNode (placed at that mesh's world centre)
-        const subLanternPivots: Map<string, BABYLON.TransformNode> = new Map();
+        // Map of sub-lantern node name → mesh
+        const subLanternMeshes: Map<string, BABYLON.AbstractMesh> = new Map();
+
+        // Exact node names from the GLB (as exported from Blender)
+        const SUB_LANTERN_NAMES = [
+            "sublantern1", "sublantern2", "sublantern3", "sublantern4",
+            "sublantern5", "sublantern6", "sublantern7", "sublantern8",
+        ];
 
         // =========================
         // LOAD MODEL
@@ -186,9 +192,17 @@ export default function ARScene() {
                 const parent = new BABYLON.TransformNode("modelParent", scene);
                 parent.rotationQuaternion = null;
 
-                // First pass: parent everything to the model root
                 meshes.forEach((mesh) => {
                     mesh.parent = parent;
+
+                    const name = mesh.name.toLowerCase();
+                    if (SUB_LANTERN_NAMES.includes(name)) {
+                        // Pivot is now correctly set in Blender — null the quaternion
+                        // so Euler rotation.y spins the mesh around its own origin
+                        mesh.rotationQuaternion = null;
+                        subLanternMeshes.set(name, mesh);
+                        console.log("✅ Sub-lantern ready:", mesh.name);
+                    }
                 });
 
                 rootMesh = parent;
@@ -198,37 +212,7 @@ export default function ARScene() {
                 colorLight.position = rootMesh.position.clone();
                 colorLight.position.y += 0.5;
 
-                // Second pass: for each sub-lantern, insert a pivot node
-                // at the mesh's own world position so rotation.y spins it
-                // around its own centre — not the parent's origin.
-                meshes.forEach((mesh) => {
-                    const lowerName = mesh.name.toLowerCase();
-                    if (SUB_LANTERN_SPEEDS[lowerName] === undefined) return;
-
-                    // Get the mesh's current world position BEFORE re-parenting
-                    const worldPos = mesh.getAbsolutePosition().clone();
-
-                    // Create a pivot node in world space at that position
-                    const pivot = new BABYLON.TransformNode(`pivot_${lowerName}`, scene);
-                    pivot.rotationQuaternion = null;
-                    pivot.position = worldPos;
-
-                    // Re-parent: mesh → pivot → modelParent
-                    // The pivot sits exactly where the mesh is, so rotating the
-                    // pivot's Y turns the mesh around its own centre.
-                    pivot.parent = parent;
-                    mesh.parent = pivot;
-
-                    // Zero out the mesh's local position so it sits at the pivot centre
-                    // (its world position is now carried by the pivot itself)
-                    mesh.position = Vector3.Zero();
-                    mesh.rotationQuaternion = null;
-
-                    subLanternPivots.set(lowerName, pivot);
-                    console.log("Sub-lantern pivot created:", lowerName, worldPos);
-                });
-
-                console.log("Sub-lantern pivots:", subLanternPivots.size);
+                console.log("Sub-lanterns found:", subLanternMeshes.size);
             });
         };
 
@@ -295,10 +279,9 @@ export default function ARScene() {
                 rootMesh.rotation.y += 0.005;
             }
 
-            // Rotate each sub-lantern's PIVOT — the pivot sits at the mesh's
-            // own world centre, so this spins each lantern around itself only.
-            subLanternPivots.forEach((pivot, name) => {
-                pivot.rotation.y += SUB_LANTERN_SPEEDS[name];
+            // Each sub-lantern spins around its own corrected Blender origin
+            subLanternMeshes.forEach((mesh, name) => {
+                mesh.rotation.y += SUB_LANTERN_SPEEDS[name];
             });
 
             // COLOUR LIGHT ANIMATION
