@@ -92,6 +92,19 @@ function FadeOverlay({ visible }: { visible: boolean }) {
     );
 }
 
+// Individual spin speed for each named sub-lantern.
+// Positive = clockwise, negative = counter-clockwise (local Y axis).
+const SUB_LANTERN_SPEEDS: Record<string, number> = {
+    sublantern1: 0.018,
+    sublantern2: -0.022,
+    sublantern3: 0.030,
+    sublantern4: -0.016,
+    sublantern5: 0.025,
+    sublantern6: -0.012,
+    sublantern7: 0.020,
+    sublantern8: -0.028,
+};
+
 export default function ARScene() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [showSplash, setShowSplash] = useState(true);
@@ -156,46 +169,45 @@ export default function ARScene() {
         gui.addControl(placedText);
 
         // VARIABLES
-        let rootMesh: BABYLON.AbstractMesh | null = null;
+        let rootMesh: BABYLON.TransformNode | null = null;
         let marker: BABYLON.Mesh | null = null;
-        const subLanterns: BABYLON.AbstractMesh[] = [];
         let modelPlaced = false;
+
+        // Map of sub-lantern name → mesh, populated after model loads
+        const subLanternMeshes: Map<string, BABYLON.AbstractMesh> = new Map();
 
         // =========================
         // LOAD MODEL
         // =========================
         const loadModel = () => {
             SceneLoader.ImportMesh("", "/models/", "VLSSL.glb", scene, (meshes) => {
-                console.log("MODEL LOADED:", meshes);
+                console.log("MODEL LOADED:", meshes.map(m => m.name));
 
                 const parent = new BABYLON.TransformNode("modelParent", scene);
+                parent.rotationQuaternion = null; // ensure Euler rotation works on parent
 
                 meshes.forEach((mesh) => {
-                    // All meshes parented to root — move together as one unit
                     mesh.parent = parent;
 
-                    if (mesh.name.toLowerCase().includes("sublantern")) {
-                        // ✅ Nullify quaternion so rotation.y works on each sub-lantern
+                    // Match by lowercase name against our known sub-lantern names
+                    const lowerName = mesh.name.toLowerCase();
+                    if (SUB_LANTERN_SPEEDS[lowerName] !== undefined) {
+                        // Kill the quaternion so we can drive rotation.y directly
+                        // in LOCAL space without it being overridden by the GLB transform
                         mesh.rotationQuaternion = null;
-                        subLanterns.push(mesh);
-                        console.log("Sub-lantern:", mesh.name);
+                        subLanternMeshes.set(lowerName, mesh);
+                        console.log("Sub-lantern registered:", mesh.name);
                     }
                 });
 
-                rootMesh = parent as any;
+                rootMesh = parent;
+                rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
+                rootMesh.position = new Vector3(0, 0, 2);
 
-                if (rootMesh) {
-                    // Nullify quaternion on parent so rotation.y works
-                    (rootMesh as any).rotationQuaternion = null;
+                colorLight.position = rootMesh.position.clone();
+                colorLight.position.y += 0.5;
 
-                    rootMesh.scaling = new Vector3(0.5, 0.5, 0.5);
-                    rootMesh.position = new Vector3(0, 0, 2);
-
-                    colorLight.position = rootMesh.position.clone();
-                    colorLight.position.y += 0.5;
-                }
-
-                console.log("SUB COUNT:", subLanterns.length);
+                console.log("Sub-lanterns found:", subLanternMeshes.size);
             });
         };
 
@@ -257,17 +269,17 @@ export default function ARScene() {
         // =========================
         engine.runRenderLoop(() => {
 
-            // Rotate entire model (main + all sub-lanterns move together)
+            // Slowly rotate the entire model assembly on its Y axis
             if (rootMesh) {
                 rootMesh.rotation.y += 0.005;
             }
 
-            // ✅ Sub-lanterns spin on their own Y axis only
-            // Position does NOT change — they stay exactly where they are
-            // in the model. Only their local Y rotation increments.
-            // Same direction as main mesh (+0.020) for a natural spin look.
-            subLanterns.forEach((lantern) => {
-                lantern.rotation.y += 0.020;
+            // Each sub-lantern spins around its OWN local Y axis independently.
+            // Because the mesh's parent is the modelParent TransformNode,
+            // rotating mesh.rotation.y changes the mesh's LOCAL orientation —
+            // it spins in place, it does NOT orbit around the parent.
+            subLanternMeshes.forEach((mesh, name) => {
+                mesh.rotation.y += SUB_LANTERN_SPEEDS[name];
             });
 
             // COLOUR LIGHT ANIMATION
